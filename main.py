@@ -1,58 +1,79 @@
+import multiprocessing
 import random
 import redis
 import string
-import multiprocessing
+import threading
+import time
 
 
-#host = 'localhost'
-host = 'redis-14700.internal.martin.demo.redislabs.com'
-#port = 6379
-port = 14700
-
-batch_size = 10000
-cores = 10
-entries_per_core = 250000
-
-r = redis.StrictRedis(host=host, port=port)
-
-
-def random_string(length=10):
-    """Generate a random string of fixed length """
+def random_string(_length=10):
+    """Generate a random string of fixed length"""
     letters = string.ascii_uppercase + string.digits
-    return ''.join(random.choice(letters) for i in range(length))
+    return ''.join(random.choice(letters) for _ in range(_length))
 
 
-def populate(amount_per_core):
-    while amount_per_core > 0:
-        with r.pipeline(transaction=False) as pipe:
-            for _ in range(0, min(batch_size, amount_per_core)):
+def populate(_amount_per_core, _redis, _batch_size=10000):
+    while _amount_per_core > 0:
+        with _redis.pipeline(transaction=False) as pipe:
+            for _ in range(0, min(_batch_size, _amount_per_core)):
                 _id = random_string()
                 key = 'prefix:{}'.format(_id)
                 pipe.hset('part:{}'.format(_id[0]), key, random_string(2000))
             pipe.execute()
-        amount_per_core -= batch_size
+        _amount_per_core -= _batch_size
 
 
-def lookup(prefix):
+def load(_redis, _cores=10, _entries_per_core=50000):
+    procs = []
+    for i in range(0, _cores):
+        p = multiprocessing.Process(target=populate, args=(_entries_per_core, _redis))
+        procs.append(p)
+        p.start()
+
+    print('loading ...')
+    [p.join() for p in procs]
+
+
+def lookup(_prefix, _redis, _count=10):
     found = []
-    cursor, result = r.hscan('part:{}'.format(prefix[0]), 0, match='prefix:{}*'.format(prefix), count=1000)
+    cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), 0, match='prefix:{}*'.format(_prefix), count=_count)
     while cursor != 0:
-        cursor, result = r.hscan('part:{}'.format(prefix[0]), cursor, match='prefix:{}*'.format(prefix), count=1000)
+        cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), cursor, match='prefix:{}*'.format(_prefix), count=_count)
         found.append(result)
 
-    return found
+    print('found {} entires'.format(len(found)))
 
 
+def lookups(_redis, _threads=10):
+    ts = []
+    for i in range(0, _threads):
+        t = threading.Thread(target=lookup, args=(random.choice(string.ascii_uppercase + string.digits) * 2, _redis))
+        ts.append(t)
+        t.start()
+    [t.join() for t in ts]
+
+
+def search(_redis, _cores=10):
+    procs = []
+    for i in range(0, _cores):
+        p = multiprocessing.Process(target=lookups, args=(_redis,))
+        procs.append(p)
+        p.start()
+
+    print('searching ...')
+    then = time.time()
+    [p.join() for p in procs]
+    now = time.time()
+    print(now - then)
+
+
+host = 'localhost'
+port = 6379
+
+r = redis.StrictRedis(host=host, port=port)
 r.flushdb()
 
-procs = []
-for i in range(0, cores):
-    p = multiprocessing.Process(target=populate, args=(entries_per_core,))
-    procs.append(p)
-    p.start()
+load(r)
+search(r)
 
-print('waiting ...')
-[p.join() for p in procs]
-
-result = lookup('A')
-print (result)
+print('done.')
