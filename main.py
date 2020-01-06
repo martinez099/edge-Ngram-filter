@@ -5,6 +5,9 @@ import string
 import threading
 import time
 
+C = 10  # paging size
+N = 2  # length of characters in a gram
+
 
 def random_string(_length=10):
     """Generate a random string of fixed length"""
@@ -34,11 +37,11 @@ def load(_redis, _cores=10, _entries_per_core=50000):
     [p.join() for p in procs]
 
 
-def lookup(_prefix, _redis, _count=10):
+def lookup(_prefix, _redis):
     found = []
-    cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), 0, match='prefix:{}*'.format(_prefix), count=_count)
+    cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), 0, match='prefix:{}*'.format(_prefix), count=C)
     while cursor != 0:
-        cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), cursor, match='prefix:{}*'.format(_prefix), count=_count)
+        cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), cursor, match='prefix:{}*'.format(_prefix), count=C)
         found.extend(result)
 
     print('found {} entires'.format(len(found)))
@@ -47,7 +50,7 @@ def lookup(_prefix, _redis, _count=10):
 def lookups(_redis, _threads=10):
     ts = []
     for i in range(0, _threads):
-        t = threading.Thread(target=lookup, args=(random.choice(string.ascii_uppercase + string.digits) * 2, _redis))
+        t = threading.Thread(target=lookup, args=(random.choice(string.ascii_uppercase + string.digits) * N, _redis))
         ts.append(t)
         t.start()
     [t.join() for t in ts]
