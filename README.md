@@ -1,2 +1,2 @@
 # fullkeyscan
-a sample to show how to search for a key in Redis
+a sample showing an edge-Ngram filter in Redis
