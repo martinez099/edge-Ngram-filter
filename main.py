@@ -39,7 +39,7 @@ def lookup(_prefix, _redis, _count=10):
     cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), 0, match='prefix:{}*'.format(_prefix), count=_count)
     while cursor != 0:
         cursor, result = _redis.hscan('part:{}'.format(_prefix[0]), cursor, match='prefix:{}*'.format(_prefix), count=_count)
-        found.append(result)
+        found.extend(result)
 
     print('found {} entires'.format(len(found)))
 
