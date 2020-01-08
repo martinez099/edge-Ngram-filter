@@ -8,8 +8,12 @@ import time
 REDIS_HOST = 'localhost'
 REDIS_PORT = 6379
 
+KEY_LENGTH = 10
+VALUE_LENGTH = 2000
+
 LOAD_BATCH_SIZE = 10000
 LOAD_ENTRIES_PER_CLIENT = 50000
+LOAD_CLIENTS = 10
 
 SEARCH_CLIENTS = 10
 SEARCH_THREADS_PER_CLIENT = 10
@@ -18,7 +22,7 @@ LOOKUP_COUNT = 10
 LOOKUP_NGRAM_SIZE = 2
 
 
-def random_string(_length=10):
+def random_string(_length):
     """Generate a random string of fixed length"""
     letters = string.ascii_uppercase + string.digits
     return ''.join(random.choice(letters) for _ in range(_length))
@@ -28,16 +32,16 @@ def populate(_amount_per_core, _redis):
     while _amount_per_core > 0:
         with _redis.pipeline(transaction=False) as pipe:
             for _ in range(0, min(LOAD_BATCH_SIZE, _amount_per_core)):
-                _id = random_string()
+                _id = random_string(KEY_LENGTH)
                 key = 'prefix:{}'.format(_id)
-                pipe.hset('part:{}'.format(_id[0]), key, random_string(2000))
+                pipe.hset('part:{}'.format(_id[0]), key, random_string(VALUE_LENGTH))
             pipe.execute()
         _amount_per_core -= LOAD_BATCH_SIZE
 
 
-def load(_redis, _cores=10):
+def load(_redis):
     procs = []
-    for i in range(0, _cores):
+    for i in range(0, LOAD_CLIENTS):
         p = multiprocessing.Process(target=populate, args=(LOAD_ENTRIES_PER_CLIENT, _redis))
         procs.append(p)
         p.start()
